@@ -96,8 +96,10 @@ python test_local.py
 Expected output:
 ```
 4/4 deterministic tests passed.
+4/4 trigger tests passed.
 Agent final decision : ESCALATE
 [PASS] No-downgrade rule enforced
+All tests complete.
 ```
 
 ---
@@ -186,7 +188,7 @@ python generate_daily_csv.py 2026-06-01
 - **Orchestration:** AWS Step Functions
 - **Processing:** AWS Glue (PySpark)
 - **Decision engine:** AWS Lambda (Python)
-- **AI reasoning:** Claude (claude-opus-4-6) via Anthropic API
+- **AI reasoning:** Claude (claude-sonnet-4-6) via Anthropic API
 - **Storage:** Amazon S3
 - **Catalog:** AWS Glue Data Catalog
 - **Query:** Amazon Athena
