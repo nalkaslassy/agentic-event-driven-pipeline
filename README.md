@@ -45,10 +45,20 @@ EventBridge (daily cron)
 
 ### Layer 2 — Claude agent (optional, set `USE_AGENT=true`)
 
-Claude receives the quality report and the deterministic decision. It adds:
-- A plain-English explanation of what happened and why
-- 2–3 concrete investigation steps
-- A confirmed or escalated decision (it can never downgrade)
+The agent runs **only when something is wrong** — it is skipped entirely on clean ALLOW batches. It triggers on ALLOW_WITH_WARNING, ESCALATE, and QUARANTINE decisions.
+
+When triggered, Claude receives the full quality report and the deterministic decision, and adds:
+- **reasoning** — plain-English explanation of what happened and why it likely occurred
+- **recommended_actions** — 2–3 specific investigation steps for the data engineer
+- **final_decision** — confirms the deterministic decision or escalates it (it can never downgrade)
+
+**Where the output goes:** the agent's response is written back to the quality report JSON in S3 under `agent_reasoning` and `agent_actions` fields. To read it after a run:
+
+```bash
+aws s3 cp s3://your-bucket/quality-reports/dt=YYYY-MM-DD/report.json - | python -m json.tool
+```
+
+Look for the `agent_reasoning` and `agent_actions` fields at the bottom of the report.
 
 ---
 
