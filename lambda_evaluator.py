@@ -169,16 +169,27 @@ def run_agent(report: dict, deterministic_result: dict) -> dict:
     """
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
-    user_message = f"""Quality report for batch date: {report.get('source_date')}
+    # Send only the fields the agent needs — skip raw counts and thresholds it already knows
+    metrics = {
+        "source_date":                       report.get("source_date"),
+        "invalid_rate":                      report.get("invalid_rate"),
+        "warning_rate":                      report.get("warning_rate"),
+        "duplicate_transactionid_rows_total": report.get("duplicate_transactionid_rows_total"),
+        "anomaly_high_amount_rate":           report.get("anomaly_high_amount_rate"),
+        "previous_invalid_rate":             report.get("previous_invalid_rate"),
+        "dominant_invalid_reason":           report.get("dominant_invalid_reason"),
+        "invalid_reason_breakdown":          report.get("invalid_reason_breakdown"),
+        "warning_reason_breakdown":          report.get("warning_reason_breakdown"),
+        "raw_count":                         report.get("raw_count"),
+        "valid_count":                       report.get("valid_count"),
+    }
 
-DETERMINISTIC DECISION: {deterministic_result['decision']}
-DETERMINISTIC REASONS:
-{chr(10).join(f"- {r}" for r in deterministic_result['reasons'])}
-
-FULL QUALITY REPORT:
-{json.dumps(report, indent=2)}
-
-Review this batch and provide your analysis."""
+    user_message = (
+        f"Batch date: {report.get('source_date')}\n"
+        f"Deterministic decision: {deterministic_result['decision']}\n"
+        f"Reasons: {'; '.join(deterministic_result['reasons'])}\n"
+        f"Metrics: {json.dumps(metrics)}"
+    )
 
     response = client.messages.create(
         model="claude-sonnet-4-6",
