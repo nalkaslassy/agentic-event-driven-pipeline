@@ -43,22 +43,27 @@ EventBridge (daily cron)
 | Invalid rate drift > 2pp from previous run | Schema change detected | ESCALATE |
 | Dominant failure reason present | Adds context to ESCALATE/QUARANTINE | — |
 
-### Layer 2 — Claude agent (optional, set `USE_AGENT=true`)
+### Layer 2 — Claude agent (optional)
 
-The agent runs **only when something is wrong** — it is skipped entirely on clean ALLOW batches. It triggers on ALLOW_WITH_WARNING, ESCALATE, and QUARANTINE decisions.
+**How to enable:** set `USE_AGENT=true` as an environment variable on the Lambda function (AWS Console → Lambda → Configuration → Environment variables). Disabled by default.
 
-When triggered, Claude receives the full quality report and the deterministic decision, and adds:
-- **reasoning** — plain-English explanation of what happened and why it likely occurred
-- **recommended_actions** — 2–3 specific investigation steps for the data engineer
-- **final_decision** — confirms the deterministic decision or escalates it (it can never downgrade)
+**When it runs:** only on non-clean batches — ALLOW_WITH_WARNING, ESCALATE, and QUARANTINE. Skipped entirely on clean ALLOW runs, since there is nothing to investigate.
 
-**Where the output goes:** the agent's response is written back to the quality report JSON in S3 under `agent_reasoning` and `agent_actions` fields. To read it after a run:
+**What it returns:** Claude (claude-sonnet-4-6) receives the full quality report and the deterministic decision and adds three fields:
+
+| Field | What it contains |
+|---|---|
+| `agent_reasoning` | Plain-English explanation of what happened and why it likely occurred |
+| `agent_actions` | 2–3 specific investigation steps for the data engineer |
+| `final_decision` | Confirmed or escalated decision — can never downgrade the deterministic result |
+
+**Where the output goes:** the agent's response is written back into the quality report JSON in S3. To read it after a run:
 
 ```bash
 aws s3 cp s3://your-bucket/quality-reports/dt=YYYY-MM-DD/report.json - | python -m json.tool
 ```
 
-Look for the `agent_reasoning` and `agent_actions` fields at the bottom of the report.
+Look for the `agent_reasoning` and `agent_actions` fields at the bottom of the JSON. The `batch_status` field will reflect the final decision (agent's if it escalated, otherwise the deterministic result).
 
 ---
 

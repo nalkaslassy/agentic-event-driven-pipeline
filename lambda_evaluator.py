@@ -181,17 +181,21 @@ FULL QUALITY REPORT:
 Review this batch and provide your analysis."""
 
     response = client.messages.create(
-        model="claude-opus-4-6",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
-        thinking={"type": "adaptive"},
         system=AGENT_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_message}]
     )
 
-    # Extract the text block (thinking block comes first with adaptive thinking)
-    raw_text = next(
-        block.text for block in response.content if block.type == "text"
-    )
+    # Extract text block — skip empty blocks (adaptive thinking can produce them)
+    raw_text = ""
+    for block in response.content:
+        if block.type == "text" and block.text and block.text.strip():
+            raw_text = block.text
+            break
+
+    if not raw_text:
+        raise ValueError("Claude returned no text content — all blocks were empty or thinking-only")
 
     # Parse JSON from response (strip markdown fences if present)
     agent_output = _parse_json(raw_text)

@@ -67,7 +67,29 @@ for expected, report in REPORTS.items():
 print(f"\n{passed}/{len(REPORTS)} deterministic tests passed.")
 
 print("\n" + "=" * 60)
-print("AGENT LAYER — ESCALATE scenario")
+print("AGENT TRIGGER LOGIC — skip on ALLOW, run on everything else")
+print("=" * 60)
+
+trigger_tests = [
+    ("ALLOW",              False),
+    ("ALLOW_WITH_WARNING", True),
+    ("ESCALATE",           True),
+    ("QUARANTINE",         True),
+]
+
+trigger_passed = 0
+for decision, should_trigger in trigger_tests:
+    det = evaluate(REPORTS[decision])
+    would_trigger = det["decision"] != "ALLOW"
+    status = "PASS" if would_trigger == should_trigger else "FAIL"
+    if status == "PASS":
+        trigger_passed += 1
+    print(f"[{status}] {decision}: agent {'runs' if would_trigger else 'skips'} (expected: {'run' if should_trigger else 'skip'})")
+
+print(f"\n{trigger_passed}/{len(trigger_tests)} trigger tests passed.")
+
+print("\n" + "=" * 60)
+print("AGENT LAYER — live call on ESCALATE scenario")
 print("=" * 60)
 
 escalate_report = REPORTS["ESCALATE"]
