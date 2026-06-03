@@ -260,10 +260,8 @@ def lambda_handler(event, context):
     agent_output  = None
     final_decision = deterministic_result["decision"]
 
-    # Agent only runs when there is something to investigate — skip clean batches
-    needs_investigation = deterministic_result["decision"] != "ALLOW"
-
-    if use_agent and needs_investigation:
+    # Agent only runs when there is something to investigate — skip clean ALLOW batches
+    if use_agent and deterministic_result["decision"] != "ALLOW":
         print("Running agent reasoning layer...")
         try:
             agent_output   = run_agent(report, deterministic_result)
