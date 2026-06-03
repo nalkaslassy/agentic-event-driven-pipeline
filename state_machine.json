@@ -1,0 +1,151 @@
+{
+  "Comment": "P005 - Daily transaction ETL pipeline. Validates input, runs Glue transform, evaluates quality, routes by decision.",
+  "StartAt": "ValidateInput",
+  "States": {
+
+    "ValidateInput": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:s3:headObject",
+      "Parameters": {
+        "Bucket.$": "$.bucket",
+        "Key.$": "$.source_date"
+      },
+      "ResultPath": "$.validation_result",
+      "Next": "RunGlueJob",
+      "Catch": [
+        {
+          "ErrorEquals": ["S3.NoSuchKeyException", "States.TaskFailed"],
+          "Next": "NotifyFailure",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+
+    "RunGlueJob": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "p005-glue-transform",
+        "Arguments": {
+          "--S3_KEY.$": "$.source_date",
+          "--BUCKET.$": "$.bucket"
+        }
+      },
+      "ResultPath": "$.glue_result",
+      "Next": "EvaluateQuality",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+
+    "EvaluateQuality": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:YOUR_ACCOUNT_ID:function:p005-lambda-evaluator",
+        "Payload": {
+          "bucket.$": "$.bucket",
+          "source_key.$": "$.source_date"
+        }
+      },
+      "ResultSelector": {
+        "decision.$": "$.Payload.decision",
+        "reasons.$":   "$.Payload.reasons"
+      },
+      "ResultPath": "$.evaluation",
+      "Next": "RouteDecision",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+
+    "RouteDecision": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.evaluation.decision",
+          "StringEquals": "QUARANTINE",
+          "Next": "NotifyQuarantine"
+        },
+        {
+          "Variable": "$.evaluation.decision",
+          "StringEquals": "ESCALATE",
+          "Next": "NotifyEscalation"
+        },
+        {
+          "Variable": "$.evaluation.decision",
+          "StringEquals": "ALLOW_WITH_WARNING",
+          "Next": "NotifyWarning"
+        }
+      ],
+      "Default": "PipelineSucceeded"
+    },
+
+    "NotifyWarning": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:us-east-1:YOUR_ACCOUNT_ID:p005-pipeline-alerts",
+        "Subject": "P005 Batch Allowed With Warnings",
+        "Message.$": "States.Format('Batch for {} passed with warnings. Reasons: {}', $.source_date, $.evaluation.reasons)"
+      },
+      "Next": "PipelineSucceeded"
+    },
+
+    "NotifyEscalation": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:us-east-1:YOUR_ACCOUNT_ID:p005-pipeline-alerts",
+        "Subject": "P005 Batch Escalated - Human Review Required",
+        "Message.$": "States.Format('Batch for {} requires human review. Reasons: {}', $.source_date, $.evaluation.reasons)"
+      },
+      "Next": "PipelineEscalated"
+    },
+
+    "NotifyQuarantine": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:us-east-1:YOUR_ACCOUNT_ID:p005-pipeline-alerts",
+        "Subject": "P005 Batch Quarantined - Quality Too Poor",
+        "Message.$": "States.Format('Batch for {} has been quarantined. Reasons: {}', $.source_date, $.evaluation.reasons)"
+      },
+      "Next": "PipelineFailed"
+    },
+
+    "NotifyFailure": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:us-east-1:YOUR_ACCOUNT_ID:p005-pipeline-alerts",
+        "Subject": "P005 Pipeline Failed",
+        "Message.$": "States.Format('Pipeline failed for date {}. Error: {}', $.source_date, $.error)"
+      },
+      "Next": "PipelineFailed"
+    },
+
+    "PipelineSucceeded": {
+      "Type": "Succeed"
+    },
+
+    "PipelineEscalated": {
+      "Type": "Succeed"
+    },
+
+    "PipelineFailed": {
+      "Type": "Fail",
+      "Error": "PipelineFailed",
+      "Cause": "See SNS notification for details"
+    }
+
+  }
+}
